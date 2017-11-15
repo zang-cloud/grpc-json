@@ -1,4 +1,4 @@
-`grpcjson` starts an HTTP server in the background and serves grpc RPC methods as JSON.
+`grpcjson` starts an HTTP server in the background and serves GRPC methods as JSON.
 
 Quickstart
 ----------
