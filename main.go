@@ -46,14 +46,11 @@ func applyOptions(options []func(*serverOpts)) *serverOpts {
 // Serve will start an HTTP server and serve the RPC methods.
 func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 	httpServerOpts := applyOptions(options)
-
-	methodNameToMethodFuncMap := map[string]reflect.Value{}
 	grpcServerType := reflect.TypeOf(grpcServer)
 
 	for i := 0; i < grpcServerType.NumMethod(); i++ {
 		methodName := grpcServerType.Method(i).Name
 		methodFunc := reflect.ValueOf(grpcServer).MethodByName(methodName)
-		methodNameToMethodFuncMap[methodName] = methodFunc
 
 		http.HandleFunc("/"+methodName, func(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
@@ -66,7 +63,7 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 
 			if err := json.NewDecoder(r.Body).Decode(structInstance); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("An error has occured"))
+				w.Write([]byte(err.Error()))
 				return
 			}
 
@@ -74,9 +71,10 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 			methodReturnVals := methodFunc.Call(methodArgs)
 
 			// If we got back an error then return it
-			if methodReturnVals[1].Interface() != nil {
+			err, _ := methodReturnVals[1].Interface().(error)
+			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("An error has occured"))
+				w.Write([]byte(err.Error()))
 				return
 			}
 
