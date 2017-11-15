@@ -1,6 +1,6 @@
 [![GoDoc](https://godoc.org/github.com/zang-cloud/grpc-json?status.svg)](https://godoc.org/github.com/zang-cloud/grpc-json)
 
-`grpc-json` starts an HTTP server in the background and serves GRPC methods as JSON.
+`grpc-json` starts an HTTP server and serves GRPC methods as JSON.
 
 Quickstart
 ----------

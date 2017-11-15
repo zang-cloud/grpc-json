@@ -1,5 +1,5 @@
 /*
-Package grpcj starts an HTTP server in the background and serves GRPC methods as JSON.
+Package grpcj starts an HTTP server and serves GRPC methods as JSON.
 
 This package uses reflection to discover all your RPC methods and automatically unmarshal the JSON requests and pass them to the proper RPC method.
 POSTing to http://mydomain/MyRPCMethodName will call the corresponding RPC method.
