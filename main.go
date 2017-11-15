@@ -1,4 +1,4 @@
-package grpcjson
+package grpcj
 
 import (
 	"context"
@@ -88,5 +88,5 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		})
 	}
 
-	go http.ListenAndServe(httpServerOpts.port, nil)
+	http.ListenAndServe(httpServerOpts.port, nil)
 }

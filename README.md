@@ -1,10 +1,10 @@
 [![GoDoc](https://godoc.org/github.com/zang-cloud/grpc-json?status.svg)](https://godoc.org/github.com/zang-cloud/grpc-json)
 
-`grpcjson` starts an HTTP server in the background and serves GRPC methods as JSON.
+`grpc-json` starts an HTTP server in the background and serves GRPC methods as JSON.
 
 Quickstart
 ----------
-`grpcjson.Serve(&myGRPCServer{}, grpcjson.Port(":8080"), grpcjson.Timeout(30*time.Second))`
+`go grpcj.Serve(&myGRPCServer{}, grpcj.Port(":8080"), grpcj.Timeout(30*time.Second))`
 
 Overview
 --------

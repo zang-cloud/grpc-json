@@ -1,4 +1,4 @@
-package grpcjson
+package grpcj
 
 import "time"
 
