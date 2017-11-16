@@ -62,7 +62,7 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 			structInstance := reflect.New(structType).Interface()
 
 			if err := json.NewDecoder(r.Body).Decode(structInstance); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(err.Error()))
 				return
 			}
