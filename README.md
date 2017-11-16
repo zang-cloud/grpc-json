@@ -26,4 +26,17 @@ message AddResponse {
     int64 sum = 1;
 }
 ```
-then simple POST a JSON payload of `{"num_one": 1, "num_two": 2}` to `http://mydomain/Add` and you will receive a response of `{"sum": 2}`.
+and the following golang implementation:
+```
+type server struct{}
+
+func (server *server) Add(ctx context.Context, req *pb.AddRequest) (*pb.AddResponse, error) {
+    resp := &pb.AddResponse{
+        Sum: req.NumOne + req.NumTwo,
+    }
+    return resp, nil
+}
+
+grpcj.Serve(&server{})
+```
+simply POST a JSON payload of `{"num_one": 1, "num_two": 1}` to localhost:8080/Add and you will receive a response of `{"sum": 2}`.
