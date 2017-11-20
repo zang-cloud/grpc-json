@@ -4,6 +4,12 @@
 
 Quickstart
 ----------
+This will start an HTTP server on port 8080:
+
+`go grpcj.Serve(&myGRPCServer{})`
+
+Options can be set like this:
+
 `go grpcj.Serve(&myGRPCServer{}, grpcj.Port(":8080"), grpcj.Timeout(30*time.Second))`
 
 Overview
@@ -40,3 +46,5 @@ func (server *server) Add(ctx context.Context, req *pb.AddRequest) (*pb.AddRespo
 grpcj.Serve(&server{})
 ```
 simply POST a JSON payload of `{"num_one": 1, "num_two": 1}` to localhost:8080/Add and you will receive a response of `{"sum": 2}`.
+
+See the [godocs](https://godoc.org/github.com/zang-cloud/grpc-json) for more information.

@@ -32,6 +32,6 @@ simply POST a JSON payload of '{"num_one": 1, "num_two": 1}' to localhost:8080/A
 
 Quickstart:
 
-    go grpcj.Serve(&myGRPCServer{}, grpcj.Port(":8080"), grpcj.Timeout(30*time.Second))
+    go grpcj.Serve(&myGRPCServer{})
 */
 package grpcj // import "github.com/zang-cloud/grpc-json"
