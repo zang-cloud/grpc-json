@@ -2,6 +2,7 @@ package grpcj
 
 import (
 	"fmt"
+	"github.com/gorilla/handlers"
 	"net/http"
 	"time"
 )
@@ -17,25 +18,16 @@ func ExampleTimeout() {
 }
 
 func ExampleMiddleware() {
-	loggerOne := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
+	logger := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("First Middleware")
 			next.ServeHTTP(w, r)
-		}
+		})
 	}
 
-	loggerTwo := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("Second Middleware")
-			next.ServeHTTP(w, r)
-		}
-	}
+	// Middleware handlers from github.com/gorilla/handlers can be used as well.
 
-	Serve(&grpcServer{}, Middleware(loggerOne, loggerTwo))
-}
-
-func ExampleCORS() {
-	Serve(&grpcServer{}, Middleware(CORS()))
+	Serve(&grpcServer{}, Middleware(logger, handlers.CORS()))
 }
 
 func ExampleServe() {

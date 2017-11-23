@@ -3,7 +3,6 @@ package grpcj
 import (
 	"context"
 	"encoding/json"
-	"github.com/gorilla/handlers"
 	"net/http"
 	"reflect"
 	"time"
@@ -17,12 +16,13 @@ const (
 type serverOpts struct {
 	port               string
 	timeout            time.Duration
-	middlewareHandlers []middleware
+	middlewareHandlers []MiddlewareFunc
 }
 
-type middleware func(http.HandlerFunc) http.HandlerFunc
+// The MiddlewareFunc type is for use in the Middlware option
+type MiddlewareFunc func(http.Handler) http.Handler
 
-func applyMiddlewareTo(handler http.HandlerFunc, middlewareHandlers []middleware) http.HandlerFunc {
+func applyMiddlewareTo(handler http.Handler, middlewareHandlers []MiddlewareFunc) http.Handler {
 	reverse(middlewareHandlers)
 	next := handler
 	for _, middlewareHandler := range middlewareHandlers {
@@ -31,59 +31,54 @@ func applyMiddlewareTo(handler http.HandlerFunc, middlewareHandlers []middleware
 	return next
 }
 
-func reverse(s []middleware) {
+func reverse(s []MiddlewareFunc) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
 }
 
-// Port sets the HTTP server port. Default is ":8080".
+// The Port option sets the HTTP server port. Default is ":8080".
 func Port(port string) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.port = port
 	}
 }
 
-// Timeout sets the HTTP request timeout. Default is 30 seconds.
+// The Timeout option sets the HTTP request timeout. Default is 30 seconds.
 func Timeout(timeout time.Duration) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.timeout = timeout
 	}
 }
 
-// Middleware registers a middleware handler. Any number of middleware handlers can be passed in and they will be called in order.
-// A middleware handler must have a signature of func(http.HandlerFunc) http.HandlerFunc.
+// The Middleware option registers a middleware handler. Any number of middleware handlers can be passed in and they will be called in order.
+// A middleware handler must have a signature of func(http.Handler) http.Handler.
 //
 // An example middleware handler:
-//		func Logger(next http.HandlerFunc) http.HandlerFunc {
-// 			return func(w http.ResponseWriter, r *http.Request) {
+//		func Logger(next http.Handler) http.Handler {
+// 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 // 				fmt.Println("Got Request")
 // 				next.ServeHTTP(w, r)
-// 			}
+// 			})
 // 		}
 //
-// To abort a request, middleware should simply
-// not call the passed-in HandlerFunc:
-//		func Auth(next http.HandlerFunc) http.HandlerFunc {
-// 			return func(w http.ResponseWriter, r *http.Request) {
+// To abort a request, middleware should simply not call the passed-in Handler:
+//		func Auth(next http.Handler) http.Handler {
+// 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 // 				if isAuthorized {
 // 					next.ServeHTTP(w, r)
 // 				} else {
 // 					fmt.Println("User is not authorized")
 // 				}
-// 			}
+// 			})
 // 		}
-func Middleware(handlers ...middleware) func(*serverOpts) {
+//
+// Because the middleware signature is the same as github.com/gorilla/handlers, those middleware handlers can be used as well.
+// For example, to use the gorilla CORS middleware:
+//		grpcj.Serve(&grpcServer{}, grpcj.Middleware(handlers.CORS()))
+func Middleware(handlers ...MiddlewareFunc) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.middlewareHandlers = append(s.middlewareHandlers, handlers...)
-	}
-}
-
-// CORS is middleware that uses the CORS handler from github.com/gorilla/handlers.
-func CORS(opts ...handlers.CORSOption) middleware {
-	handler := handlers.CORS(opts...)
-	return func(next http.HandlerFunc) http.HandlerFunc {
-		return handler(next).ServeHTTP
 	}
 }
 
@@ -91,7 +86,7 @@ func applyOptions(options []func(*serverOpts)) *serverOpts {
 	httpServerOpts := &serverOpts{
 		port:               defaultPort,
 		timeout:            defaultTimeout,
-		middlewareHandlers: []middleware{},
+		middlewareHandlers: []MiddlewareFunc{},
 	}
 	for _, opt := range options {
 		opt(httpServerOpts)
@@ -108,7 +103,7 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		methodName := grpcServerType.Method(i).Name
 		methodFunc := reflect.ValueOf(grpcServer).MethodByName(methodName)
 
-		handler := func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(context.Background(), httpServerOpts.timeout)
 			defer cancel()
 
@@ -140,9 +135,9 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 				w.Write([]byte("An error has occured"))
 				return
 			}
-		}
+		})
 
-		http.HandleFunc("/"+methodName, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers))
+		http.HandleFunc("/"+methodName, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
 	}
 
 	http.ListenAndServe(httpServerOpts.port, nil)
