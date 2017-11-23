@@ -34,6 +34,10 @@ func ExampleMiddleware() {
 	Serve(&grpcServer{}, Middleware(loggerOne, loggerTwo))
 }
 
+func ExampleCORS() {
+	Serve(&grpcServer{}, Middleware(CORS()))
+}
+
 func ExampleServe() {
 	// With no options set, will default to port :8080 and request timeout of 30 seconds.
 	Serve(&grpcServer{})

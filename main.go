@@ -3,6 +3,7 @@ package grpcj
 import (
 	"context"
 	"encoding/json"
+	"github.com/gorilla/handlers"
 	"net/http"
 	"reflect"
 	"time"
@@ -54,7 +55,7 @@ func Timeout(timeout time.Duration) func(*serverOpts) {
 // A middleware handler must have a signature of func(http.HandlerFunc) http.HandlerFunc.
 //
 // An example middleware handler:
-//		func Logger(next http.HandlerFunc) http.handlerFunc {
+//		func Logger(next http.HandlerFunc) http.HandlerFunc {
 // 			return func(w http.ResponseWriter, r *http.Request) {
 // 				fmt.Println("Got Request")
 // 				next.ServeHTTP(w, r)
@@ -63,7 +64,7 @@ func Timeout(timeout time.Duration) func(*serverOpts) {
 //
 // To abort a request, middleware should simply
 // not call the passed-in HandlerFunc:
-//		func Auth(next http.HandlerFunc) http.handlerFunc {
+//		func Auth(next http.HandlerFunc) http.HandlerFunc {
 // 			return func(w http.ResponseWriter, r *http.Request) {
 // 				if isAuthorized {
 // 					next.ServeHTTP(w, r)
@@ -75,6 +76,14 @@ func Timeout(timeout time.Duration) func(*serverOpts) {
 func Middleware(handlers ...middleware) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.middlewareHandlers = append(s.middlewareHandlers, handlers...)
+	}
+}
+
+// CORS is middleware that uses the CORS handler from github.com/gorilla/handlers.
+func CORS(opts ...handlers.CORSOption) middleware {
+	handler := handlers.CORS(opts...)
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return handler(next).ServeHTTP
 	}
 }
 
