@@ -30,6 +30,10 @@ func ExampleMiddleware() {
 	Serve(&grpcServer{}, Middleware(logger, handlers.CORS()))
 }
 
+func ExampleBasicAuth() {
+	Serve(&grpcServer{}, Middleware(BasicAuth("my_username", "my_password")))
+}
+
 func ExampleServe() {
 	// With no options set, will default to port :8080 and request timeout of 30 seconds.
 	Serve(&grpcServer{})

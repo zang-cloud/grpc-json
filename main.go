@@ -82,6 +82,28 @@ func Middleware(handlers ...MiddlewareFunc) func(*serverOpts) {
 	}
 }
 
+// BasicAuth is a MiddlewareFunc that enforces basic auth.
+func BasicAuth(username, password string) MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+
+			authUsername, authPassword, ok := r.BasicAuth()
+			if !ok {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			if authUsername != username || authPassword != password {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func applyOptions(options []func(*serverOpts)) *serverOpts {
 	httpServerOpts := &serverOpts{
 		port:               defaultPort,
@@ -112,8 +134,7 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 
 			defer r.Body.Close()
 			if err := json.NewDecoder(r.Body).Decode(structInstance); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(err.Error()))
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
@@ -123,16 +144,14 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 			// If we got back an error then return it
 			err, _ := methodReturnVals[1].Interface().(error)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 			w.Header().Set("Content-Type", "application/json")
 			resp := methodReturnVals[0].Interface()
 			if err := json.NewEncoder(w).Encode(resp); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("An error has occured"))
+				http.Error(w, "An error has occured", http.StatusInternalServerError)
 				return
 			}
 		})
