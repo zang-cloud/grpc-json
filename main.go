@@ -23,7 +23,6 @@ type serverOpts struct {
 type MiddlewareFunc func(http.Handler) http.Handler
 
 func applyMiddlewareTo(handler http.Handler, middlewareHandlers []MiddlewareFunc) http.Handler {
-	reverse(middlewareHandlers)
 	next := handler
 	for _, middlewareHandler := range middlewareHandlers {
 		next = middlewareHandler(next)
@@ -119,6 +118,7 @@ func applyOptions(options []func(*serverOpts)) *serverOpts {
 // Serve will start an HTTP server and serve the RPC methods.
 func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 	httpServerOpts := applyOptions(options)
+	reverse(httpServerOpts.middlewareHandlers)
 	grpcServerType := reflect.TypeOf(grpcServer)
 
 	for i := 0; i < grpcServerType.NumMethod(); i++ {
