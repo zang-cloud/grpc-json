@@ -3,6 +3,8 @@ package grpcj
 import (
 	"context"
 	"encoding/json"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"net/http"
 	"reflect"
 	"time"
@@ -13,9 +15,12 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
+var defaultMarshaler = jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: false}
+
 type serverOpts struct {
 	port               string
 	timeout            time.Duration
+	marshaler          jsonpb.Marshaler
 	middlewareHandlers []MiddlewareFunc
 }
 
@@ -47,6 +52,13 @@ func Port(port string) func(*serverOpts) {
 func Timeout(timeout time.Duration) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.timeout = timeout
+	}
+}
+
+// The Marshaler allows defining the jsonpb marshaler. Default marshaler is jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: false}.
+func Marshaler(marshaler jsonpb.Marshaler) func(*serverOpts) {
+	return func(s *serverOpts) {
+		s.marshaler = marshaler
 	}
 }
 
@@ -107,6 +119,7 @@ func applyOptions(options []func(*serverOpts)) *serverOpts {
 	httpServerOpts := &serverOpts{
 		port:               defaultPort,
 		timeout:            defaultTimeout,
+		marshaler:          defaultMarshaler,
 		middlewareHandlers: []MiddlewareFunc{},
 	}
 	for _, opt := range options {
@@ -148,9 +161,12 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 				return
 			}
 
+			// {{{{{ TODO: UPTO }}}}}
+			// INTS ARE BEING SET TO STRINGS
+			// {{{{{{{{{{{}}}}}}}}}}}
 			w.Header().Set("Content-Type", "application/json")
-			resp := methodReturnVals[0].Interface()
-			if err := json.NewEncoder(w).Encode(resp); err != nil {
+			resp, _ := methodReturnVals[0].Interface().(proto.Message)
+			if err := httpServerOpts.marshaler.Marshal(w, resp); err != nil {
 				http.Error(w, "An error has occured", http.StatusInternalServerError)
 				return
 			}
