@@ -14,7 +14,7 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
-var defaultMarshaler = jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: false, Int64AsString: false, Uint64AsString: false}
+var defaultMarshaler = jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}
 var defaultUnmarshaler = jsonpb.Unmarshaler{AllowUnknownFields: false}
 
 type serverOpts struct {
@@ -56,7 +56,7 @@ func Timeout(timeout time.Duration) func(*serverOpts) {
 	}
 }
 
-// Marshaler allows defining the JSON marshaler. Default marshaler is the github.com/zang-cloud/grpc-json/jsonpb.go Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: false, Int64AsString: false, Uint64AsString: false}.
+// Marshaler allows defining the JSON marshaler. Default marshaler is the github.com/zang-cloud/grpc-json/jsonpb.go Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}.
 // The Marshaler is a copy of the github.com/golang/protobuf/jsonpb/jsonpb.go Marshaler but adds 2 options: Int64AsString and Uint64AsString.
 // These options were added to allow returning Int64 and Uint64 as numbers instead of strings.
 func Marshaler(marshaler jsonpb.Marshaler) func(*serverOpts) {
