@@ -2,9 +2,12 @@ package grpcj
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/zang-cloud/grpc-json/jsonpb"
 	"net/http"
+	"os"
+	"os/signal"
 	"reflect"
 	"time"
 )
@@ -184,5 +187,33 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		http.HandleFunc("/"+methodName, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
 	}
 
-	http.ListenAndServe(httpServerOpts.port, nil)
+	serverHTTP := &http.Server{Addr: httpServerOpts.port}
+
+	// Graceful shutdown.
+	idleConnsClosed := make(chan struct{})
+	exitChan := make(chan os.Signal, 1)
+	signal.Notify(exitChan, os.Interrupt, os.Kill)
+	go func() {
+		exitSignal := <-exitChan
+		fmt.Printf("Received shutdown signal '%s', attempting graceful shutdown of grpc-json server\n", exitSignal)
+		if err := serverHTTP.Shutdown(context.Background()); err != nil {
+			fmt.Println("Error gracefully shutting down grpc-json server:", err)
+		}
+		close(idleConnsClosed)
+
+		// We need to re-emit the exit signal because the normal use case is that
+		// grpc-json will be run in a goroutine and it has hijacked the exit signal.
+		fmt.Println("Graceful shutdown of grpc-json complete, re-emitting exit signal", exitSignal)
+		signal.Stop(exitChan)
+		if currentProcess, err := os.FindProcess(os.Getpid()); err != nil {
+			fmt.Println("Error getting current process to re-emit exit signal:", err)
+		} else {
+			currentProcess.Signal(exitSignal)
+		}
+	}()
+
+	if err := serverHTTP.ListenAndServe(); err != http.ErrServerClosed {
+		fmt.Println("Error listening and serving grpc-json:", err)
+	}
+	<-idleConnsClosed
 }
