@@ -51,5 +51,5 @@ See the [godocs](https://godoc.org/github.com/zang-cloud/grpc-json) for more inf
 
 Goodies
 -------
-* grpc-json implements a slightly modified version of the golang jsobpb Marshaler that allows returning Int64 and Uint64 as numbers instead of strings.
+* grpc-json implements a slightly modified version of the standard protobuf jsobpb Marshaler that allows returning Int64 and Uint64 as numbers instead of strings.
 * grpc-json will gracefully shut down using the http.Server Shutdown. Since grpc-json is commonly run in a goroutine and since the caller may not be catching the exit signal themselves, grpc-json will re-emit the signal after having gracefully shutdown.
