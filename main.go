@@ -202,7 +202,7 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		close(idleConnsClosed)
 
 		// We need to re-emit the exit signal because the normal use case is that
-		// grpc-json will be run in a goroutine and it has hijacked the exit signal.
+		// grpc-json will be run in a goroutine and since it has hijacked the exit signal it must re-emit.
 		fmt.Println("Graceful shutdown of grpc-json complete, re-emitting exit signal", exitSignal)
 		signal.Stop(exitChan)
 		if currentProcess, err := os.FindProcess(os.Getpid()); err != nil {
