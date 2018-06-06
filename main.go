@@ -1,14 +1,18 @@
 package grpcj
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/joncalhoun/qson"
 	"github.com/zang-cloud/grpc-json/jsonpb"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"time"
 )
 
@@ -21,11 +25,25 @@ var defaultMarshaler = jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, O
 var defaultUnmarshaler = jsonpb.Unmarshaler{AllowUnknownFields: false}
 
 type serverOpts struct {
-	port               string
-	timeout            time.Duration
-	marshaler          jsonpb.Marshaler
-	unmarshaler        jsonpb.Unmarshaler
-	middlewareHandlers []MiddlewareFunc
+	port                string
+	timeout             time.Duration
+	marshaler           jsonpb.Marshaler
+	unmarshaler         jsonpb.Unmarshaler
+	endpointToMethodMap map[string]interface{}
+	allowedMethods      []string
+	middlewareHandlers  []MiddlewareFunc
+}
+
+func (s *serverOpts) isAllowedMethod(methodName string) bool {
+	if len(s.allowedMethods) < 1 {
+		return true
+	}
+	for _, method := range s.allowedMethods {
+		if methodName == method {
+			return true
+		}
+	}
+	return false
 }
 
 // The MiddlewareFunc type is for use in the Middlware option
@@ -73,6 +91,25 @@ func Marshaler(marshaler jsonpb.Marshaler) func(*serverOpts) {
 func Unmarshaler(unmarshaler jsonpb.Unmarshaler) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.unmarshaler = unmarshaler
+	}
+}
+
+// AddEndpoints allows adding endpoints that are mapped to GRPC methods. It takes a map of URL path to GRPC method.
+// The URL path must include the starting / (e.g. "/MyAddedEndpoint")
+func AddEndpoints(endpointToMethodMap map[string]interface{}) func(*serverOpts) {
+	return func(s *serverOpts) {
+		s.endpointToMethodMap = endpointToMethodMap
+	}
+}
+
+// AllowedMethods allows restricting access to only the defined methods.
+// Pass in a slice of methods (e.g. AllowedMethods([]interface{}{server.Add})).
+func AllowedMethods(allowedMethods []interface{}) func(*serverOpts) {
+	return func(s *serverOpts) {
+		for _, method := range allowedMethods {
+			methodName := runtime.FuncForPC(reflect.ValueOf(method).Pointer()).Name()
+			s.allowedMethods = append(s.allowedMethods, methodName)
+		}
 	}
 }
 
@@ -148,46 +185,27 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 	httpServerOpts := applyOptions(options)
 	reverse(httpServerOpts.middlewareHandlers)
 	grpcServerType := reflect.TypeOf(grpcServer)
+	mux := http.NewServeMux()
 
 	for i := 0; i < grpcServerType.NumMethod(); i++ {
 		methodName := grpcServerType.Method(i).Name
-		methodFunc := reflect.ValueOf(grpcServer).MethodByName(methodName)
-
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, cancel := context.WithTimeout(context.Background(), httpServerOpts.timeout)
-			defer cancel()
-
-			structType := methodFunc.Type().In(1).Elem()
-			structInstance, _ := reflect.New(structType).Interface().(proto.Message)
-
-			defer r.Body.Close()
-			if err := httpServerOpts.unmarshaler.Unmarshal(r.Body, structInstance); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			methodArgs := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(structInstance)}
-			methodReturnVals := methodFunc.Call(methodArgs)
-
-			// If we got back an error then return it
-			err, _ := methodReturnVals[1].Interface().(error)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			resp, _ := methodReturnVals[0].Interface().(proto.Message)
-			if err := httpServerOpts.marshaler.Marshal(w, resp); err != nil {
-				http.Error(w, "An error has occured", http.StatusInternalServerError)
-				return
-			}
-		})
-
-		http.HandleFunc("/"+methodName, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
+		if httpServerOpts.isAllowedMethod(methodName) {
+			methodFunc := reflect.ValueOf(grpcServer).MethodByName(methodName)
+			handler := grpcjHandler(methodFunc, httpServerOpts)
+			mux.HandleFunc("/"+methodName, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
+		}
 	}
 
-	serverHTTP := &http.Server{Addr: httpServerOpts.port}
+	for endpoint, method := range httpServerOpts.endpointToMethodMap {
+		methodName := runtime.FuncForPC(reflect.ValueOf(method).Pointer()).Name()
+		if httpServerOpts.isAllowedMethod(methodName) {
+			methodFunc := reflect.ValueOf(method)
+			handler := grpcjHandler(methodFunc, httpServerOpts)
+			mux.HandleFunc(endpoint, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
+		}
+	}
+
+	serverHTTP := &http.Server{Addr: httpServerOpts.port, Handler: mux}
 
 	// Graceful shutdown.
 	idleConnsClosed := make(chan struct{})
@@ -216,4 +234,54 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		fmt.Println("Error listening and serving grpc-json:", err)
 	}
 	<-idleConnsClosed
+}
+
+func grpcjHandler(methodFunc reflect.Value, httpServerOpts *serverOpts) http.HandlerFunc {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(context.Background(), httpServerOpts.timeout)
+		defer cancel()
+
+		structType := methodFunc.Type().In(1).Elem()
+		structInstance, _ := reflect.New(structType).Interface().(proto.Message)
+
+		switch r.Method {
+		case "POST":
+			defer r.Body.Close()
+			if err := httpServerOpts.unmarshaler.Unmarshal(r.Body, structInstance); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		case "GET":
+			parsedJSON, err := qson.ToJSON(r.URL.RawQuery)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := httpServerOpts.unmarshaler.Unmarshal(ioutil.NopCloser(bytes.NewReader(parsedJSON)), structInstance); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+
+		methodArgs := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(structInstance)}
+		methodReturnVals := methodFunc.Call(methodArgs)
+
+		// If we got back an error then return it
+		err, _ := methodReturnVals[1].Interface().(error)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		resp, _ := methodReturnVals[0].Interface().(proto.Message)
+		if err := httpServerOpts.marshaler.Marshal(w, resp); err != nil {
+			http.Error(w, "An error has occured", http.StatusInternalServerError)
+			return
+		}
+	})
+	return handler
 }
