@@ -32,6 +32,9 @@ type serverOpts struct {
 	endpointToMethodMap map[string]interface{}
 	allowedMethods      []string
 	middlewareHandlers  []MiddlewareFunc
+	healthcheckEndpoint string
+	healthcheckFunc     func() error
+	healthcheckInterval time.Duration
 }
 
 func (s *serverOpts) isAllowedMethod(methodName string) bool {
@@ -95,7 +98,7 @@ func Unmarshaler(unmarshaler jsonpb.Unmarshaler) func(*serverOpts) {
 }
 
 // AddEndpoints allows adding endpoints that are mapped to GRPC methods. It takes a map of URL path to GRPC method.
-// The URL path must include the starting / (e.g. "/MyAddedEndpoint")
+// The URL path must include the starting / (e.g. "/MyAddedEndpoint").
 func AddEndpoints(endpointToMethodMap map[string]interface{}) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.endpointToMethodMap = endpointToMethodMap
@@ -113,7 +116,21 @@ func AllowedMethods(allowedMethods []interface{}) func(*serverOpts) {
 	}
 }
 
-// The Middleware option registers a middleware handler. Any number of middleware handlers can be passed in and they will be called in order.
+var healthcheckStatus int = http.StatusOK
+
+// HealthCheck allows defining an endpoint for healthchecks as well as a function to be executed at defined intervals to check the health of the service.
+// The healthcheck function will be run at the defined intervals and will respond to http requests with 200 or 500 depending on the status of the healthcheck.
+// Ideally this function should check any external dependencies such as pinging mysql etc. and should return any error.
+// The endpoint name must include the starting / (e.g. "/MyHealtchCheck").
+func HealthCheck(endpoint string, healthcheckFunc func() error, healthcheckInterval time.Duration) func(*serverOpts) {
+	return func(s *serverOpts) {
+		s.healthcheckEndpoint = endpoint
+		s.healthcheckFunc = healthcheckFunc
+		s.healthcheckInterval = healthcheckInterval
+	}
+}
+
+// Middleware registers a middleware handler. Any number of middleware handlers can be passed in and they will be called in order.
 // A middleware handler must have a signature of func(http.Handler) http.Handler.
 //
 // An example middleware handler:
@@ -203,6 +220,21 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 			handler := grpcjHandler(methodFunc, httpServerOpts)
 			mux.HandleFunc(endpoint, applyMiddlewareTo(handler, httpServerOpts.middlewareHandlers).ServeHTTP)
 		}
+	}
+
+	if httpServerOpts.healthcheckFunc != nil {
+		go func() {
+			for _ = range time.Tick(httpServerOpts.healthcheckInterval) {
+				if err := httpServerOpts.healthcheckFunc(); err != nil {
+					healthcheckStatus = http.StatusInternalServerError
+				} else {
+					healthcheckStatus = http.StatusOK
+				}
+			}
+		}()
+		mux.HandleFunc(httpServerOpts.healthcheckEndpoint, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(healthcheckStatus)
+		})
 	}
 
 	serverHTTP := &http.Server{Addr: httpServerOpts.port, Handler: mux}
