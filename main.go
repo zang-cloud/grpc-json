@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/joncalhoun/qson"
+	"github.com/sirupsen/logrus"
 	"github.com/zang-cloud/grpc-json/jsonpb"
 	"io/ioutil"
 	"net/http"
@@ -226,8 +227,12 @@ func Serve(grpcServer interface{}, options ...func(*serverOpts)) {
 		go func() {
 			for _ = range time.Tick(httpServerOpts.healthcheckInterval) {
 				if err := httpServerOpts.healthcheckFunc(); err != nil {
+					logrus.Errorln("Healthcheck failed:", err)
 					healthcheckStatus = http.StatusInternalServerError
 				} else {
+					if healthcheckStatus != http.StatusOK {
+						logrus.Infoln("Healthcheck recovered")
+					}
 					healthcheckStatus = http.StatusOK
 				}
 			}
