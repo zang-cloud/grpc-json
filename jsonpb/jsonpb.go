@@ -123,7 +123,11 @@ type JSONPBUnmarshaler interface {
 }
 
 // Marshal marshals a protocol buffer into JSON.
-func (m *Marshaler) Marshal(out io.Writer, pb proto.Message) error {
+func (m *Marshaler) Marshal(out io.Writer, pbInter interface{}) error {
+	pb, ok := pbInter.(proto.Message)
+	if !ok {
+		return errors.New("Marshal requires a proto.Message")
+	}
 	writer := &errWriter{writer: out}
 	return m.marshalObject(writer, pb, "", "")
 }
@@ -644,7 +648,11 @@ func (u *Unmarshaler) UnmarshalNext(dec *json.Decoder, pb proto.Message) error {
 // Unmarshal unmarshals a JSON object stream into a protocol
 // buffer. This function is lenient and will decode any options
 // permutations of the related Marshaler.
-func (u *Unmarshaler) Unmarshal(r io.Reader, pb proto.Message) error {
+func (u *Unmarshaler) Unmarshal(r io.Reader, pbInter interface{}) error {
+	pb, ok := pbInter.(proto.Message)
+	if !ok {
+		return errors.New("Unmarshal requires a proto.Message")
+	}
 	dec := json.NewDecoder(r)
 	return u.UnmarshalNext(dec, pb)
 }
