@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/joncalhoun/qson"
-	"github.com/sirupsen/logrus"
-	"github.com/zang-cloud/grpc-json/jsonpb"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -15,6 +11,11 @@ import (
 	"reflect"
 	"runtime"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/joncalhoun/qson"
+	"github.com/sirupsen/logrus"
+	jsonpb "github.com/zang-cloud/grpc-json/jsonpb-gogo"
 )
 
 const (
@@ -22,14 +23,14 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
-var defaultMarshaler = jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}
-var defaultUnmarshaler = jsonpb.Unmarshaler{AllowUnknownFields: false}
+var defaultMarshaler = jsonpb.MarshalerGOGO{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}
+var defaultUnmarshaler = jsonpb.UnmarshalerGOGO{AllowUnknownFields: false}
 
 type serverOpts struct {
 	port                string
 	timeout             time.Duration
-	marshaler           jsonpb.Marshaler
-	unmarshaler         jsonpb.Unmarshaler
+	marshaler           jsonpb.MarshalerGOGO
+	unmarshaler         jsonpb.UnmarshalerGOGO
 	endpointToMethodMap map[string]interface{}
 	allowedMethods      []string
 	middlewareHandlers  []MiddlewareFunc
@@ -84,7 +85,7 @@ func Timeout(timeout time.Duration) func(*serverOpts) {
 // Marshaler allows defining the JSON marshaler. Default marshaler is the github.com/zang-cloud/grpc-json/jsonpb.go Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}.
 // The Marshaler is a copy of the github.com/golang/protobuf/jsonpb/jsonpb.go Marshaler but adds 2 options: Int64AsString and Uint64AsString.
 // These options were added to allow returning Int64 and Uint64 as numbers instead of strings.
-func Marshaler(marshaler jsonpb.Marshaler) func(*serverOpts) {
+func Marshaler(marshaler jsonpb.MarshalerGOGO) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.marshaler = marshaler
 	}
@@ -92,7 +93,7 @@ func Marshaler(marshaler jsonpb.Marshaler) func(*serverOpts) {
 
 // Unmarshaler allows defining the JSON unmarshaler. Default unmarshaler is the github.com/zang-cloud/grpc-json/jsonpb.go Unmarshaler{AllowUnknownFields: false}.
 // The Unmarshaler is a copy of the github.com/golang/protobuf/jsonpb/jsonpb.go Unmarshaler.
-func Unmarshaler(unmarshaler jsonpb.Unmarshaler) func(*serverOpts) {
+func Unmarshaler(unmarshaler jsonpb.UnmarshalerGOGO) func(*serverOpts) {
 	return func(s *serverOpts) {
 		s.unmarshaler = unmarshaler
 	}
