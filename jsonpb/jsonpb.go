@@ -53,6 +53,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/golang/protobuf/ptypes"
 	stpb "github.com/golang/protobuf/ptypes/struct"
 )
 
@@ -85,6 +86,9 @@ type Marshaler struct {
 
 	// Whether to render Uin64 as string.
 	Uint64AsString bool
+
+	// Whether to try and marshal time.Time (needed for gogoproto).
+	HandleStdTime bool
 }
 
 // AnyResolver takes a type URL, present in an Any message, and resolves it into
@@ -216,18 +220,7 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 			// TODO: pass the correct Properties if needed.
 			return m.marshalValue(out, &proto.Properties{}, s.Field(0), indent)
 		case "Timestamp":
-			// "RFC 3339, where generated output will always be Z-normalized
-			//  and uses 3, 6 or 9 fractional digits."
-			s, ns := s.Field(0).Int(), s.Field(1).Int()
-			t := time.Unix(s, ns).UTC()
-			// time.RFC3339Nano isn't exactly right (we need to get 3/6/9 fractional digits).
-			x := t.Format("2006-01-02T15:04:05.000000000")
-			x = strings.TrimSuffix(x, "000")
-			x = strings.TrimSuffix(x, "000")
-			out.write(`"`)
-			out.write(x)
-			out.write(`Z"`)
-			return out.err
+			return m.marshalTimestamp(s, out)
 		case "Value":
 			// Value has a single oneof.
 			kind := s.Field(0)
@@ -238,6 +231,25 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 			// oneof -> *T -> T -> T.F
 			x := kind.Elem().Elem().Field(0)
 			// TODO: pass the correct Properties if needed.
+
+			if m.HandleStdTime {
+				// Handle time.Time (used by gogoproto).
+				if vTime, ok := x.Interface().(time.Time); ok {
+					pTime, err := ptypes.TimestampProto(vTime)
+					if err != nil {
+						return err
+					}
+					return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
+				}
+				if vTime, ok := x.Interface().(*time.Time); ok {
+					pTime, err := ptypes.TimestampProto(*vTime)
+					if err != nil {
+						return err
+					}
+					return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
+				}
+			}
+
 			return m.marshalValue(out, &proto.Properties{}, x, indent)
 		}
 	}
@@ -359,6 +371,21 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 		out.write(indent)
 	}
 	out.write("}")
+	return out.err
+}
+
+func (m *Marshaler) marshalTimestamp(v reflect.Value, out *errWriter) error {
+	// "RFC 3339, where generated output will always be Z-normalized
+	//  and uses 3, 6 or 9 fractional digits."
+	s, ns := v.Field(0).Int(), v.Field(1).Int()
+	t := time.Unix(s, ns).UTC()
+	// time.RFC3339Nano isn't exactly right (we need to get 3/6/9 fractional digits).
+	x := t.Format("2006-01-02T15:04:05.000000000")
+	x = strings.TrimSuffix(x, "000")
+	x = strings.TrimSuffix(x, "000")
+	out.write(`"`)
+	out.write(x)
+	out.write(`Z"`)
 	return out.err
 }
 

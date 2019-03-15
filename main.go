@@ -27,7 +27,7 @@ const (
 var DefaultMarshaler = &jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}
 var DefaultUnmarshaler = &jsonpb.Unmarshaler{AllowUnknownFields: false}
 
-var DefaultMarshalerGOGO = &jsonpb.MarshalerGOGO{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false}
+var DefaultMarshalerGOGO = &jsonpb.MarshalerGOGO{EnumsAsInts: true, EmitDefaults: true, OrigName: true, Int64AsString: false, Uint64AsString: false, HandleStdTime: true}
 var DefaultUnmarshalerGOGO = &jsonpb.UnmarshalerGOGO{AllowUnknownFields: false}
 
 type JSONPBMarshaler interface {
