@@ -163,7 +163,26 @@ type wkt interface {
 }
 
 // marshalObject writes a struct to the Writer.
-func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeURL string) error {
+func (m *Marshaler) marshalObject(out *errWriter, vIn interface{}, indent, typeURL string) error {
+	v, ok := vIn.(proto.Message)
+	if !ok {
+		// The only non-protos we currently handle are time.Time since gogoproto supports it
+		if vTime, ok := vIn.(*time.Time); ok {
+			pTime, err := ptypes.TimestampProto(*vTime)
+			if err != nil {
+				return err
+			}
+			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
+		}
+		if vTime, ok := vIn.(time.Time); ok {
+			pTime, err := ptypes.TimestampProto(vTime)
+			if err != nil {
+				return err
+			}
+			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
+		}
+	}
+
 	if jsm, ok := v.(JSONPBMarshaler); ok {
 		b, err := jsm.MarshalJSONPB(m)
 		if err != nil {
@@ -233,34 +252,6 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 			// TODO: pass the correct Properties if needed.
 
 			return m.marshalValue(out, &proto.Properties{}, x, indent)
-		}
-	}
-
-	// Handle time.Time (used by gogoproto).
-	// TODO: also handle time.Time in a slice
-	if m.HandleStdTime {
-		// Value has a single oneof.
-		kind := s.Field(0)
-		if kind.IsNil() {
-			// "absence of any variant indicates an error"
-			return errors.New("nil Value")
-		}
-		// oneof -> *T -> T -> T.F
-		x := kind.Elem().Elem().Field(0)
-
-		if vTime, ok := x.Interface().(time.Time); ok {
-			pTime, err := ptypes.TimestampProto(vTime)
-			if err != nil {
-				return err
-			}
-			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
-		}
-		if vTime, ok := x.Interface().(*time.Time); ok {
-			pTime, err := ptypes.TimestampProto(*vTime)
-			if err != nil {
-				return err
-			}
-			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
 		}
 	}
 
@@ -569,7 +560,7 @@ func (m *Marshaler) marshalValue(out *errWriter, prop *proto.Properties, v refle
 
 	// Handle nested messages.
 	if v.Kind() == reflect.Struct {
-		return m.marshalObject(out, v.Addr().Interface().(proto.Message), indent+m.Indent, "")
+		return m.marshalObject(out, v.Addr().Interface(), indent+m.Indent, "")
 	}
 
 	// Handle maps.
