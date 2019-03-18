@@ -165,7 +165,7 @@ type wkt interface {
 // marshalObject writes a struct to the Writer.
 func (m *Marshaler) marshalObject(out *errWriter, vIn interface{}, indent, typeURL string) error {
 	v, ok := vIn.(proto.Message)
-	if !ok {
+	if !ok && m.HandleStdTime {
 		// The only non-protos we currently handle are time.Time since gogoproto supports it
 		if vTime, ok := vIn.(*time.Time); ok {
 			pTime, err := ptypes.TimestampProto(*vTime)
