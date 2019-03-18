@@ -232,25 +232,35 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 			x := kind.Elem().Elem().Field(0)
 			// TODO: pass the correct Properties if needed.
 
-			if m.HandleStdTime {
-				// Handle time.Time (used by gogoproto).
-				if vTime, ok := x.Interface().(time.Time); ok {
-					pTime, err := ptypes.TimestampProto(vTime)
-					if err != nil {
-						return err
-					}
-					return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
-				}
-				if vTime, ok := x.Interface().(*time.Time); ok {
-					pTime, err := ptypes.TimestampProto(*vTime)
-					if err != nil {
-						return err
-					}
-					return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
-				}
-			}
-
 			return m.marshalValue(out, &proto.Properties{}, x, indent)
+		}
+	}
+
+	// Handle time.Time (used by gogoproto).
+	// TODO: also handle time.Time in a slice
+	if m.HandleStdTime {
+		// Value has a single oneof.
+		kind := s.Field(0)
+		if kind.IsNil() {
+			// "absence of any variant indicates an error"
+			return errors.New("nil Value")
+		}
+		// oneof -> *T -> T -> T.F
+		x := kind.Elem().Elem().Field(0)
+
+		if vTime, ok := x.Interface().(time.Time); ok {
+			pTime, err := ptypes.TimestampProto(vTime)
+			if err != nil {
+				return err
+			}
+			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
+		}
+		if vTime, ok := x.Interface().(*time.Time); ok {
+			pTime, err := ptypes.TimestampProto(*vTime)
+			if err != nil {
+				return err
+			}
+			return m.marshalTimestamp(reflect.ValueOf(pTime).Elem(), out)
 		}
 	}
 
