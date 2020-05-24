@@ -55,6 +55,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	stpb "github.com/golang/protobuf/ptypes/struct"
+	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 // Marshaler is a configurable object for converting between
@@ -209,6 +210,9 @@ func (m *Marshaler) marshalObject(out *errWriter, vIn interface{}, indent, typeU
 	}
 
 	s := reflect.ValueOf(v).Elem()
+	if ts, ok := s.Interface().(timestamp.Timestamp); ok {
+		return m.marshalEpochToStdFormat(ts.Seconds, int64(ts.Nanos), out)
+	}
 
 	// Handle well-known types.
 	if wkt, ok := v.(wkt); ok {
@@ -379,7 +383,10 @@ func (m *Marshaler) marshalTimestamp(v reflect.Value, out *errWriter) error {
 	// "RFC 3339, where generated output will always be Z-normalized
 	//  and uses 3, 6 or 9 fractional digits."
 	s, ns := v.Field(0).Int(), v.Field(1).Int()
-	t := time.Unix(s, ns).UTC()
+	return m.marshalEpochToStdFormat(s, ns, out)
+}
+func (m *Marshaler) marshalEpochToStdFormat(seconds int64, nanos int64, out *errWriter) error {
+	t := time.Unix(seconds, nanos).UTC()
 	// time.RFC3339Nano isn't exactly right (we need to get 3/6/9 fractional digits).
 	x := t.Format("2006-01-02T15:04:05.000000000")
 	x = strings.TrimSuffix(x, "000")
@@ -388,6 +395,7 @@ func (m *Marshaler) marshalTimestamp(v reflect.Value, out *errWriter) error {
 	out.write(x)
 	out.write(`Z"`)
 	return out.err
+
 }
 
 func (m *Marshaler) writeSep(out *errWriter) {
