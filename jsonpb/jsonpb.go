@@ -275,6 +275,10 @@ func (m *Marshaler) marshalObject(out *errWriter, vIn interface{}, indent, typeU
 		if strings.HasPrefix(valueField.Name, "XXX_") {
 			continue
 		}
+		// feature-avoiding-serializing-internal-fields
+		if valueField.Name[0] < 'A' || valueField.Name[0] > 'Z' {
+			continue
+		}
 
 		// IsNil will panic on most value kinds.
 		switch value.Kind() {
