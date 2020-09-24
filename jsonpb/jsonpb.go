@@ -740,6 +740,23 @@ func (u *Unmarshaler) unmarshalValue(target reflect.Value, inputValue json.RawMe
 		return jsu.UnmarshalJSONPB(u, []byte(inputValue))
 	}
 
+	if _, v1 := target.Interface().(timestamp.Timestamp); v1 {
+		unq, err := strconv.Unquote(string(inputValue))
+		if err != nil {
+			return err
+		}
+
+		t, err := time.Parse(time.RFC3339Nano, unq)
+		if err != nil {
+			return fmt.Errorf("bad Timestamp: %v", err)
+		}
+		unix := t.Unix()
+		nanoSecond := int64(t.Nanosecond())
+		target.FieldByName("Seconds").SetInt(unix)
+		target.FieldByName("Nanos").SetInt(nanoSecond)
+		return nil
+	}
+
 	// Handle well-known types that are not pointers.
 	if w, ok := target.Addr().Interface().(wkt); ok {
 		switch w.XXX_WellKnownType() {
