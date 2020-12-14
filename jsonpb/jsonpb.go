@@ -386,7 +386,7 @@ func (m *Marshaler) marshalObject(out *errWriter, vIn interface{}, indent, typeU
 func (m *Marshaler) marshalTimestamp(v reflect.Value, out *errWriter) error {
 	// "RFC 3339, where generated output will always be Z-normalized
 	//  and uses 3, 6 or 9 fractional digits."
-	s, ns := v.Field(0).Int(), v.Field(1).Int()
+	s, ns := v.FieldByName("Seconds").Int(), v.FieldByName("Nanos").Int()
 	return m.marshalEpochToStdFormat(s, ns, out)
 }
 func (m *Marshaler) marshalEpochToStdFormat(seconds int64, nanos int64, out *errWriter) error {
